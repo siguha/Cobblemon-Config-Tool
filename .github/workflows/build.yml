@@ -3,7 +3,7 @@ name: Build Windows Executable
 on:
   push:
     tags:
-      - "v*.*.*"   # Trigger only when you push a version tag like v1.0.0
+      - "v*.*.*"
 
 jobs:
   build:
@@ -24,25 +24,16 @@ jobs:
       - name: Build exe
         run: pyinstaller --onefile --noconsole src/loot_config_tool_gui.py
 
-      - name: Archive exe
-        uses: actions/upload-artifact@v4
-        with:
-          name: Loot-Config-Tool
-          path: dist/loot_config_tool_gui.exe
+      - name: Get tag name
+        id: vars
+        run: echo "tag=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
 
-  release:
-    runs-on: windows-latest
-    needs: build
-    steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Loot-Config-Tool
-          path: dist
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/loot_config_tool_gui.exe
+      - name: Upload exe to existing release
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: https://uploads.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.vars.outputs.tag }}
+          asset_path: dist/loot_config_tool_gui.exe
+          asset_name: loot_config_tool_gui.exe
+          asset_content_type: application/octet-stream
