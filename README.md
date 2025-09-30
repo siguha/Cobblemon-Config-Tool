@@ -1,3 +1,4 @@
+[![Download](https://img.shields.io/github/v/release/siguha/Cobblemon-Config-Tool?label=Download)](https://github.com/siguha/Cobblemon-Config-Tool/releases/latest)
 
 a Cobblemon Academy Config Tool
 ====================================
@@ -17,12 +18,14 @@ What it does
 - Seamlessly interacts with your config files to edit everything FOR you! Wow!
 - Backs your config files up in case you pump a little too much too fast! Amazing!!
 
-How To runtime_hooks
+How To Use
 ------------
-### Option 1: Use the included Windows app
-1. Download and unzip the release package.
-2. Double-click `Loot Config Tool.exe`.
-3. In the GUI, use the “Browse…” button to select your datapack root (the folder containing `data/academy/...`).
+### Option 1 (recommended): Download the latest release build
+1. Navigate to this repository's "Releases" page, or click the badge above.
+2. Download the latest .exe build for the tool.
+3. Move the .exe to it's own folder (*I recommend on Desktop*)
+4. Run it (***if Windows defender blocks it, you'll need to allow it to run anyway***)
+5. Select the ROOT folder of your datapack (*.../datapacks/Academy/*) on both tabs and config!
 4. Switch between the **Academy Tiers** and **Chest Loot Tables** tabs to adjust what you want.
 5. Click **Apply Changes** (tiers) or **Apply** (per chest) to save.
 
@@ -38,7 +41,7 @@ Tips
 - The rate of change is incredibly drastic if you're mapping a global change to every value.
 - For tier weights, click “Load Tiers from Chest Files” to see current values, change them, then Apply.
 
-I'd overall be very mindful blindly assigning new values. For example, if you blindly global apply a 2x multiplier on all legendary chances,
+I'd be very mindful blindly assigning new values. For example, if you blindly global apply a 2x multiplier on all legendary chances,
 your lower tier chests will seem more reasonable, but your higher tier less so in comparison as you'll virtually see legendaries in every chest.
 In a modpack like this where level 100 gyms aren't arduous past a certain point, you'll lose a lot of the fun in legendary chasing.
 
@@ -49,3 +52,7 @@ Troubleshooting
 - If you see “Failed to parse JSON” warnings: the tool scans every .json under your root. Some files
   may not be valid JSON (comments, trailing commas). That’s fine—those files are skipped.
 - To reduce noise, keep paths under `data/<namespace>/loot_table/` (or `loot_tables`) and use the GUI tabs.
+
+Any questions? DM me on Discord @sigRao and I will *try* my best to notice and respond (no promises).
+
+Feel free to alter the tool to best fit your needs.
