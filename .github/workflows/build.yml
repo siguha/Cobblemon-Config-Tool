@@ -1,9 +1,8 @@
 name: Build Windows Executable
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  release:
+    types: [published]
 
 jobs:
   build:
@@ -24,16 +23,9 @@ jobs:
       - name: Build exe
         run: pyinstaller --onefile --noconsole src/loot_config_tool_gui.py
 
-      - name: Get tag name
-        id: vars
-        run: echo "tag=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
-
-      - name: Upload exe to existing release
-        uses: actions/upload-release-asset@v1
+      - name: Upload exe to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/loot_config_tool_gui.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: https://uploads.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.vars.outputs.tag }}
-          asset_path: dist/loot_config_tool_gui.exe
-          asset_name: loot_config_tool_gui.exe
-          asset_content_type: application/octet-stream
