@@ -1,3 +1,5 @@
+[![Download](https://img.shields.io/github/v/release/YOURNAME/Cobblemon-Academy-Config-Tool?label=Download)](https://github.com/siguha/Cobblemon-Config-Tool/releases/latest)
+
 
 a Cobblemon Academy Config Tool
 ====================================
