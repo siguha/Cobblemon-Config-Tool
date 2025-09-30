@@ -1,0 +1,48 @@
+name: Build Windows Executable
+
+on:
+  push:
+    tags:
+      - "v*.*.*"   # Trigger only when you push a version tag like v1.0.0
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build exe
+        run: pyinstaller --onefile --noconsole src/loot_config_tool_gui.py
+
+      - name: Archive exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: Loot-Config-Tool
+          path: dist/loot_config_tool_gui.exe
+
+  release:
+    runs-on: windows-latest
+    needs: build
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Loot-Config-Tool
+          path: dist
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/loot_config_tool_gui.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
