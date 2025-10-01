@@ -28,6 +28,7 @@ How To Use
 5. Select the ROOT folder of your datapack (*.../datapacks/Academy/*) on both tabs and config!
 4. Switch between the **Academy Tiers** and **Chest Loot Tables** tabs to adjust what you want.
 5. Click **Apply Changes** (tiers) or **Apply** (per chest) to save.
+6. Highlighting a row will allow you to view it's references (what chests/loot_tables use that table). Double clicking the name of a reference will open a text-editor with that config file for more precise control.
 
 ### Option 2: Run from source (for advanced users)
 1. Install Python 3.9 or newer from https://www.python.org/downloads/.
@@ -52,6 +53,8 @@ Troubleshooting
 - If you see “Failed to parse JSON” warnings: the tool scans every .json under your root. Some files
   may not be valid JSON (comments, trailing commas). That’s fine—those files are skipped.
 - To reduce noise, keep paths under `data/<namespace>/loot_table/` (or `loot_tables`) and use the GUI tabs.
+
+- "**Windows Protected your PC**" - Since this tool isn't official or recognized by Windows, it'll give you this warning. Rest assured, there's zero threat to your system. Press ***More Info*** on the bottom left and press ***Run Anyway*** on the bottom right.
 
 Any questions? DM me on Discord @sigRao and I will *try* my best to notice and respond (no promises).
 
