@@ -1115,35 +1115,109 @@ class App(tk.Tk):
     # Tab 2 for chest editing
 
     def _build_tab2(self, parent):
-        # header
-        header = ttk.Frame(parent, padding=(10, 10, 10, 4))
+        """Build Tab 2 (Chest Loot Tables): scrollable list of chest JSONs with in-row editing."""
+        header = ttk.Frame(parent, padding=10)
         header.pack(fill="x")
+
         ttk.Label(header, text="Chest Loot Tables Root:").grid(row=0, column=0, sticky="w")
-        ent = ttk.Entry(header, textvariable=self.var_chest_root, width=70)
-        ent.grid(row=0, column=1, sticky="we", padx=6)
+        ent_root = ttk.Entry(header, textvariable=self.var_chest_root, width=70)
+        ent_root.grid(row=0, column=1, sticky="we", padx=6)
         ttk.Button(header, text="Browse…", command=self._pick_chest_root).grid(row=0, column=2)
+        Tooltip(ent_root, "Select the datapack root that contains data/minecraft/loot_table/chests")
 
-        # scroll box
-        container = ttk.Frame(parent, padding=(10, 4))
+        ttk.Separator(parent, orient="horizontal").pack(fill="x", pady=4)
+
+        # --- Scrollable container for the rows ---
+        container = ttk.Frame(parent)
         container.pack(fill="both", expand=True)
-        self.chest_canvas = tk.Canvas(container, highlightthickness=0)
-        self.chest_scroll = ttk.Scrollbar(container, orient="vertical", command=self.chest_canvas.yview)
-        self.chest_canvas.configure(yscrollcommand=self.chest_scroll.set)
-        self.chest_canvas.pack(side="left", fill="both", expand=True)
-        self.chest_scroll.pack(side="right", fill="y")
 
-        self.chest_frame = ttk.Frame(self.chest_canvas)
-        self.chest_window = self.chest_canvas.create_window((0, 0), window=self.chest_frame, anchor="nw")
+        self._chest_canvas = tk.Canvas(container, borderwidth=0, highlightthickness=0)
+        vsb = ttk.Scrollbar(container, orient="vertical", command=self._chest_canvas.yview)
+        self._chest_canvas.configure(yscrollcommand=vsb.set)
 
-        self.chest_frame.bind("<Configure>",
-            lambda e: self.chest_canvas.configure(scrollregion=self.chest_canvas.bbox("all")))
-        self.chest_canvas.bind("<Configure>",
-            lambda e: self.chest_canvas.itemconfigure(self.chest_window, width=e.width))
+        vsb.pack(side="right", fill="y")
+        self._chest_canvas.pack(side="left", fill="both", expand=True)
 
-        # footer buttons
+        # Inner frame that actually holds the rows
+        self.chest_frame = ttk.Frame(self._chest_canvas)
+        self._chest_canvas_window = self._chest_canvas.create_window((0, 0), window=self.chest_frame, anchor="nw")
+
+        # Configure scrollregion and match inner frame width to canvas width
+        def _on_configure(_event=None):
+            self._chest_canvas.configure(scrollregion=self._chest_canvas.bbox("all"))
+            # Keep inner frame width equal to canvas width (so rows stretch)
+            self._chest_canvas.itemconfigure(self._chest_canvas_window, width=self._chest_canvas.winfo_width())
+        self.chest_frame.bind("<Configure>", _on_configure)
+        self._chest_canvas.bind("<Configure>", _on_configure)
+
+        # Mouse wheel scrolling
+        def _on_mousewheel(event):
+            # Windows: event.delta is multiple of 120
+            self._chest_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        self._chest_canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # Store per-row UI/metadata
+        self.chest_rows = {}  # { str(path): {frame, expanded, details, controls: [(pidx, eidx, var)], fname_label} }
+
         footer = ttk.Frame(parent, padding=10)
         footer.pack(fill="x")
-        ttk.Button(footer, text="Load Chest Tables", command=self._load_chests).pack(side="left")
+        ttk.Button(footer, text="Load / Refresh Chest Tables", command=self._refresh_chests).pack(side="left")
+
+    def _refresh_chests(self):
+        """Load/refresh the list of chest loot table files into the scrollable area."""
+        # Clear existing rows
+        for child in self.chest_frame.winfo_children():
+            child.destroy()
+        self.chest_rows.clear()
+
+        root = Path(self.var_chest_root.get() or "").resolve()
+        chests_root = root / "data" / "minecraft" / "loot_table" / "chests"
+        if not chests_root.exists():
+            messagebox.showerror("Invalid Root", "Could not find data/minecraft/loot_table/chests under the selected root.")
+            return
+
+        # List chest JSONs
+        paths = sorted(chests_root.glob("*.json"))
+        for path in paths:
+            # Row container
+            row = ttk.Frame(self.chest_frame, padding=6)
+            row.pack(fill="x", pady=2)
+
+            # Bold filename
+            fname_lbl = ttk.Label(row, text=path.name, font=("Segoe UI", 9, "bold"))
+            fname_lbl.pack(side="left")
+
+            # Secondary truncated path label
+            sub_path = short_display_path(path)
+            path_lbl = ttk.Label(row, text=f"   {sub_path}", foreground="#666")
+            path_lbl.pack(side="left")
+
+            # Double-click opens the file in Notepad
+            def _open_file(_event=None, p=path):
+                try:
+                    subprocess.Popen(["notepad.exe", str(p)])
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to open:\n{p}\n\n{e}")
+            fname_lbl.bind("<Double-1>", _open_file)
+            path_lbl.bind("<Double-1>", _open_file)
+
+            # Expand button
+            ttk.Button(
+                row, text="Expand",
+                command=lambda p=path, r=root: self._toggle_chest_row(p, r)
+            ).pack(side="right")
+
+            # Metadata for this chest
+            self.chest_rows[str(path)] = {
+                "frame": row,
+                "expanded": False,
+                "details": None,
+                "controls": [],        # ensures it's always present
+                "fname_label": fname_lbl,
+            }
+
+        # Update scrollregion
+        self._chest_canvas.configure(scrollregion=self._chest_canvas.bbox("all"))
 
     def _pick_chest_root(self):
         d = filedialog.askdirectory(
@@ -1200,7 +1274,7 @@ class App(tk.Tk):
 
         details = ttk.Frame(outer)
         details.pack(fill="x", padx=12, pady=(4, 0))
-        details.pack_forget()  # start collapsed
+        details.pack_forget()
 
         self.chest_rows[str(path)] = {
             "outer": outer,
@@ -1208,115 +1282,156 @@ class App(tk.Tk):
             "expanded": False,
             "toggle_btn": toggle_btn,
             "root": pack_root,
-            "controls": [],   # list of (pool_index, entry_index, weight_var)
+            "controls": [],
             "path": path,
         }
 
-
     def _toggle_chest_row(self, path: Path, pack_root: Path):
-        row = self.chest_rows.get(str(path))
+        """
+        Expand/collapse a chest row to show its loot table entries.
+        Expands cleanly below the row, not to the right.
+        """
+        key = str(path)
+        row = self.chest_rows.get(key)
         if not row:
             return
+
         if row["expanded"]:
-            row["details"].pack_forget()
-            row["toggle_btn"].configure(text="+")
+            if row.get("details") is not None:
+                row["details"].destroy()
+                row["details"] = None
+            row["controls"].clear()
             row["expanded"] = False
             return
 
-        # expand and rebuild UI
-        for child in row["details"].winfo_children():
-            child.destroy()
+        details = ttk.Frame(self.chest_frame, padding=(4, 2))
+        details.pack(fill="x", pady=(0, 8), after=row["frame"])
+        row["details"] = details
         row["controls"].clear()
 
         doc = load_json(path)
-        if doc is None:
-            ttk.Label(row["details"], text="(Failed to parse JSON)").pack(anchor="w")
-        else:
-            pool_list = list(iter_pools(doc))
-            if not pool_list:
-                ttk.Label(row["details"], text="(No pools / entries)").pack(anchor="w")
-            else:
-                hdr = ttk.Frame(row["details"])
-                hdr.pack(fill="x", pady=(2, 2))
-                ttk.Label(hdr, text="Pool", width=6).grid(row=0, column=0, sticky="w")
-                ttk.Label(hdr, text="Type", width=12).grid(row=0, column=1, sticky="w")
-                ttk.Label(hdr, text="ID (value/name)", width=40).grid(row=0, column=2, sticky="w")
-                ttk.Label(hdr, text="Weight", width=10).grid(row=0, column=3, sticky="w")
+        if not doc:
+            ttk.Label(details, text="Failed to parse JSON for this chest.", foreground="red").pack(anchor="w")
+            row["expanded"] = True
+            return
 
-                # alternative shading for style here again, for readability
-                for pi, pool in enumerate(pool_list):
-                    entries = list(iter_entries(pool))
-                    for ei, e in enumerate(entries):
-                        style = "RowOdd.TFrame" if (ei % 2 == 0) else "RowEven.TFrame"
-                        line = ttk.Frame(row["details"], style=style)
-                        line.pack(fill="x", pady=1)
-                        etype = e.get("type", "")
-                        eid = e.get("value") if etype == "loot_table" else e.get("name", "")
-                        w = entry_weight(e)
-                        ttk.Label(line, text=str(pi), width=6).grid(row=0, column=0, sticky="w")
-                        ttk.Label(line, text=str(etype), width=12).grid(row=0, column=1, sticky="w")
-                        ttk.Label(line, text=str(eid), width=40).grid(row=0, column=2, sticky="w")
-                        wvar = tk.StringVar(value=str(w))
-                        ttk.Entry(line, textvariable=wvar, width=10).grid(row=0, column=3, sticky="w")
-                        row["controls"].append((pi, ei, wvar))
+        pool_idx = -1
+        for pool in iter_pools(doc):
+            pool_idx += 1
 
-        btn_bar = ttk.Frame(row["details"])
+            # Pool header
+            pool_header = ttk.Label(details, text=f"Pool {pool_idx + 1}", font=("Segoe UI", 9, "bold"))
+            pool_header.pack(anchor="w", pady=(6, 2))
+
+            # Table frame for entries
+            table = ttk.Frame(details)
+            table.pack(fill="x", padx=12, pady=(0, 6))
+
+            # Headings
+            ttk.Label(table, text="Type", width=20, anchor="w").grid(row=0, column=0, sticky="w", padx=2)
+            ttk.Label(table, text="Name / Value", width=60, anchor="w").grid(row=0, column=1, sticky="w", padx=2)
+            ttk.Label(table, text="Weight", width=12, anchor="w").grid(row=0, column=2, sticky="w", padx=2)
+
+            entry_idx = -1
+            for e in iter_entries(pool):
+                entry_idx += 1
+                e_type = e.get("type", "")
+                name = e.get("name") or e.get("value") or ""
+                try:
+                    w = float(entry_weight(e))
+                except Exception:
+                    w = float(e.get("weight", 1.0))
+
+                bg = "#f8f8f8" if entry_idx % 2 == 0 else "#ffffff"
+
+                type_lbl = tk.Label(table, text=e_type, width=20, anchor="w", bg=bg)
+                type_lbl.grid(row=entry_idx + 1, column=0, sticky="w", padx=2)
+
+                name_lbl = tk.Label(table, text=name, width=60, anchor="w", bg=bg)
+                name_lbl.grid(row=entry_idx + 1, column=1, sticky="w", padx=2)
+
+                var = tk.DoubleVar(value=w)
+                ent = ttk.Entry(table, textvariable=var, width=12)
+                ent.grid(row=entry_idx + 1, column=2, sticky="w", padx=2)
+
+                row["controls"].append((pool_idx, entry_idx, var))
+
+        btn_bar = ttk.Frame(details)
         btn_bar.pack(fill="x", pady=(6, 2))
-        ttk.Button(btn_bar, text="Apply", command=lambda: self._apply_chest(path)).pack(side="right")
+        ttk.Button(btn_bar, text="Apply",
+                command=lambda p=path, r=pack_root: self._apply_chest(p, r)).pack(side="right")
 
-        row["details"].pack(fill="x")
-        row["toggle_btn"].configure(text="–")
         row["expanded"] = True
 
-    def _apply_chest(self, path: Path):
-        """Apply weight edits to one chest JSON, with backup and inline refresh."""
-        row = self.chest_rows.get(str(path))
+    def _apply_chest(self, path: Path, pack_root: Path):
+        """
+        Write edited weights back to the chest loot table JSON.
+        Creates a backup first, then saves.
+        """
+        key = str(path)
+        row = self.chest_rows.get(key)
         if not row:
             return
 
         doc = load_json(path)
-        if doc is None:
-            messagebox.showerror("Error", f"Failed to parse {path}")
+        if not doc:
+            messagebox.showerror("Error", f"Failed to re-load JSON:\n{path}")
             return
 
-        if isinstance(doc.get("pools"), list):
-            pools_ref = doc["pools"]   # type: ignore
-        elif isinstance(doc.get("entries"), list):
-            pools_ref = [{"entries": doc.get("entries")}]
-        else:
-            pools_ref = []
+        controls = row.get("controls", [])
+        if not controls:
+            messagebox.showinfo("Nothing to Apply", "No editable fields found for this chest.")
+            return
 
         changed = False
-        for (pi, ei, wvar) in row["controls"]:
-            try:
-                new_w = max(0.0, float(wvar.get().strip()))
-            except Exception:
+        pool_list = list(iter_pools(doc))
+        for (pool_idx, entry_idx, var) in controls:
+            if pool_idx >= len(pool_list):
+                continue
+            entries = list(iter_entries(pool_list[pool_idx]))
+            if entry_idx >= len(entries):
                 continue
             try:
-                entry = pools_ref[pi]["entries"][ei]
+                new_w = float(var.get())
+                if new_w < 0:
+                    new_w = 0.0
             except Exception:
                 continue
-            if abs(entry_weight(entry) - new_w) > 1e-9:
-                set_entry_weight(entry, new_w)
+
+            e = entries[entry_idx]
+            old_w = None
+            try:
+                old_w = float(entry_weight(e))
+            except Exception:
+                try:
+                    old_w = float(e.get("weight", 1.0))
+                except Exception:
+                    old_w = None
+
+            if old_w is None or abs(new_w - old_w) > 1e-9:
+                try:
+                    set_entry_weight(e, new_w)
+                except Exception:
+                    # Fallback setter
+                    e["weight"] = new_w
                 changed = True
 
         if not changed:
-            messagebox.showinfo("No Changes", "No weight changes detected for this chest.")
+            messagebox.showinfo("No Changes", "All weights are unchanged.")
             return
 
-        if not messagebox.askyesno("Confirm Apply",
-                                   f"Apply changes to:\n{path}\n\nThis will write the JSON (backup will be created)."):
+        try:
+            ensure_backup(path, pack_root, self.backup_root)
+        except Exception as be:
+            messagebox.showwarning("Backup Warning", f"Could not create backup for:\n{path}\n\n{be}")
+
+        try:
+            save_json(path, doc)
+        except Exception as se:
+            messagebox.showerror("Save Error", f"Failed to save:\n{path}\n\n{se}")
             return
 
-        ensure_backup(path, row["root"], self.backup_root)
-        save_json(path, doc)
-
-        # Refresh only this row
-        if row["expanded"]:
-            self._toggle_chest_row(path, row["root"])
-            self._toggle_chest_row(path, row["root"])
-
-        messagebox.showinfo("Done", f"Saved changes for:\n{path}\nBackup in:\n{self.backup_root}")
+        messagebox.showinfo("Saved", f"Updated weights written to:\n{path}\nBackups in:\n{self.backup_root}")
 
 def main():
     app = App()
