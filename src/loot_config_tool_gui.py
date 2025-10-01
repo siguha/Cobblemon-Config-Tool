@@ -57,6 +57,7 @@ import json
 import os
 import shutil
 import time
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -77,6 +78,7 @@ class TableInfo:
     chance_str: str
     can_edit: bool
     air_weight: Optional[float] = None
+    loot_id: Optional[str] = None
 
 # Directories under academy/loot_table(s) to exclude ( for some reason I was fetching these and CBA to figure out why :D )
 EXCLUDED_TYPE_DIRS = {"cobblemon", "megashowdown", "numismaticoverhaul", "simpletms"}
@@ -372,6 +374,8 @@ class App(tk.Tk):
         super().__init__()
         self.title("Config Tool for Cobblemon Academy | by @sigRao")
         self.minsize(1200, 820)
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
 
         # shared state
         self.var_root = tk.StringVar(value=os.getcwd())
@@ -491,7 +495,7 @@ class App(tk.Tk):
         ttk.Button(choice_win, text="Cancel", command=choice_win.destroy).pack()
     
     def _build_tab1(self, parent):
-        # header section
+        # --- Header section ---
         header = ttk.Frame(parent, padding=10)
         header.pack(fill="x")
 
@@ -508,37 +512,31 @@ class App(tk.Tk):
 
         ttk.Separator(parent, orient="horizontal").pack(fill="x", pady=4)
 
-        # modes section
+        # --- Modes ---
         controls = ttk.Frame(parent, padding=(10, 6))
         controls.pack(fill="x")
 
-        # global change section
+        # Global adjust
         frm_global = ttk.Frame(controls)
         frm_global.grid(row=0, column=0, sticky="w", padx=4, pady=2)
-        ttk.Checkbutton(
-            frm_global,
-            text="Adjust All Tiers and Variations",
-            variable=self.var_mode_global,
-            command=lambda: self._set_mode("global"),
-        ).grid(row=0, column=0, sticky="w")
+        ttk.Checkbutton(frm_global, text="Adjust All Tiers and Variations",
+                        variable=self.var_mode_global,
+                        command=lambda: self._set_mode("global")).grid(row=0, column=0, sticky="w")
         ttk.Label(frm_global, text="Multiplier:").grid(row=0, column=1, padx=(12, 4))
         self.ent_gm = ttk.Entry(frm_global, textvariable=self.var_global_mult, width=8, state="disabled")
         self.ent_gm.grid(row=0, column=2)
         self.ent_gm.bind("<KeyRelease>", lambda e: self._update_dynamic_chances())
         Tooltip(frm_global, "Multiplies all existing weights by X amount. CAREFUL-Changes might not be balanced.")
 
-        # tier section
+        # Tier adjust
         frm_tier = ttk.Frame(controls)
         frm_tier.grid(row=1, column=0, sticky="w", padx=4, pady=2)
-        ttk.Checkbutton(
-            frm_tier,
-            text="Adjust by Tier",
-            variable=self.var_mode_tier,
-            command=lambda: self._set_mode("tier"),
-        ).grid(row=0, column=0, sticky="w")
+        ttk.Checkbutton(frm_tier, text="Adjust by Tier",
+                        variable=self.var_mode_tier,
+                        command=lambda: self._set_mode("tier")).grid(row=0, column=0, sticky="w")
         ttk.Label(frm_tier, text="Tier:").grid(row=0, column=1, padx=(12, 4))
         self.cbo_tier = ttk.Combobox(frm_tier, values=[str(i) for i in range(0, 11)],
-                                     width=5, state="disabled", textvariable=self.var_tier)
+                                    width=5, state="disabled", textvariable=self.var_tier)
         self.cbo_tier.grid(row=0, column=2)
         self.cbo_tier.bind("<<ComboboxSelected>>", lambda e: self._update_dynamic_chances())
         ttk.Label(frm_tier, text="Multiplier:").grid(row=0, column=3, padx=(12, 4))
@@ -547,34 +545,29 @@ class App(tk.Tk):
         self.ent_tm.bind("<KeyRelease>", lambda e: self._update_dynamic_chances())
         Tooltip(frm_tier, "Multiplies all existing weights for a specific tier, across all table variations.")
 
-        # specific tables
+        # Specific adjust
         frm_spec = ttk.Frame(controls)
         frm_spec.grid(row=2, column=0, sticky="w", padx=4, pady=2)
-        ttk.Checkbutton(
-            frm_spec,
-            text="Adjust Specific Tables (Ctrl+Click to select rows)",
-            variable=self.var_mode_specific,
-            command=lambda: self._set_mode("specific"),
-        ).grid(row=0, column=0, sticky="w")
+        ttk.Checkbutton(frm_spec, text="Adjust Specific Tables (Ctrl+Click to select rows)",
+                        variable=self.var_mode_specific,
+                        command=lambda: self._set_mode("specific")).grid(row=0, column=0, sticky="w")
         ttk.Label(frm_spec, text="Multiplier:").grid(row=0, column=1, padx=(12, 4))
         self.ent_sm = ttk.Entry(frm_spec, textvariable=self.var_spec_mult, width=8, state="disabled")
         self.ent_sm.grid(row=0, column=2)
         self.ent_sm.bind("<KeyRelease>", lambda e: self._update_dynamic_chances())
         Tooltip(frm_spec, "Multiplies all selected weights by X amount.")
 
-        # fine-tuning air weight options
+        # Fine-tune Air/Empty weights
         frm_air = ttk.Frame(controls)
         frm_air.grid(row=3, column=0, sticky="w", padx=4, pady=2)
-        ttk.Checkbutton(
-            frm_air,
-            text="Fine-tune Air Weights",
-            variable=self.var_mode_air,
-            command=lambda: self._set_mode("air"),
-        ).grid(row=0, column=0, sticky="w")
-        Tooltip(frm_air, "Allows you to edit the literal chance of a legendary occuring by replacing the multiplier column on the right.")
+        ttk.Checkbutton(frm_air, text="Fine-tune Air/Empty Weights",
+                        variable=self.var_mode_air,
+                        command=lambda: self._set_mode("air")).grid(row=0, column=0, sticky="w")
+        Tooltip(frm_air, "Allows you to edit the literal chance of a legendary occurring by replacing the multiplier column on the right.")
+
         ttk.Separator(parent, orient="horizontal").pack(fill="x", pady=6)
 
-        # filter
+        # --- Filter ---
         fbar = ttk.Frame(parent, padding=(10, 4))
         fbar.pack(fill="x")
         ttk.Label(fbar, text="Filter:").pack(side="left")
@@ -583,49 +576,68 @@ class App(tk.Tk):
         self.filter_var.trace_add("write", lambda *_: self._apply_filter())
         ttk.Button(fbar, text="Reset Multipliers", command=self._reset_multipliers).pack(side="right")
 
-        # tree
-        body = ttk.Frame(parent, padding=(10, 6))
-        body.pack(fill="both", expand=True)
+        # --- Body: PanedWindow with Tree and References ---
+        self.body_pane = ttk.Panedwindow(parent, orient="horizontal")
+        self.body_pane.pack(fill="both", expand=True, padx=6, pady=6)
 
-        self.tree = ttk.Treeview(body, columns=("path", "chance", "editcol"),
-                                 show="tree headings", selectmode="extended")
+        # Left side (Tree)
+        left = ttk.Frame(self.body_pane)
+        self.tree = ttk.Treeview(left, columns=("path", "chance", "editcol"),
+                                show="tree headings", selectmode="extended")
         self.tree.heading("#0", text="Type")
         self.tree.heading("path", text="Loot Table Path")
         self.tree.heading("chance", text="Chance (≈ 1/N, %)")
-        self.tree.heading("editcol", text="Multiplier")  # becomes "Air Weight" in air mode
+        self.tree.heading("editcol", text="Multiplier")
 
         self.tree.column("#0", width=180, anchor="w")
         self.tree.column("path", width=600, anchor="w")
         self.tree.column("chance", width=260, anchor="w")
         self.tree.column("editcol", width=140, anchor="w")
 
-        vsb = ttk.Scrollbar(body, orient="vertical", command=self.tree.yview)
-        hsb = ttk.Scrollbar(body, orient="horizontal", command=self.tree.xview)
+        vsb = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
+        hsb = ttk.Scrollbar(left, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscroll=vsb.set, xscroll=hsb.set)
         self.tree.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
         hsb.grid(row=1, column=0, sticky="ew")
-        body.rowconfigure(0, weight=1)
-        body.columnconfigure(0, weight=1)
+        left.rowconfigure(0, weight=1)
+        left.columnconfigure(0, weight=1)
 
-        # bolding selected entries for readability
+        self.body_pane.add(left, weight=3)
+
+        # Right side (References, initially hidden)
+        self.refs_panel = ttk.Frame(self.body_pane, relief="sunken", padding=6)
+        self.refs_label = ttk.Label(self.refs_panel, text="References:", font=("Segoe UI", 10, "bold"))
+        self.refs_label.pack(anchor="w")
+        self.refs_list = tk.Listbox(self.refs_panel)
+        self.refs_list.pack(fill="both", expand=True, pady=4)
+        self.refs_list_paths = []
+        def open_selected(_):
+            sel = self.refs_list.curselection()
+            if not sel: return
+            full_path = self.refs_list_paths[sel[0]]
+            try:
+                subprocess.Popen(["notepad.exe", full_path])
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to open {full_path}\n{e}")
+        self.refs_list.bind("<Double-1>", open_selected)
+
+        # Tags and bindings
         self.tree.tag_configure("changed", font=("Segoe UI", 9, "bold"))
         self.tree.tag_configure("selected_for_specific", font=("Segoe UI", 9, "bold"))
         self.tree.tag_configure("tier_target", font=("Segoe UI", 9, "bold"))
         self.tree.tag_configure("global_target", font=("Segoe UI", 9, "bold"))
 
-        # bindings
         self.tree.bind("<<TreeviewSelect>>", lambda e: self._on_tree_selection_changed())
-        self.tree.bind("<Double-1>", self._on_tree_double_click)  # edit Air/Empty cell in Air mode
-        self.tree.bind("<Control-Button-1>", lambda e: None)      # native Ctrl+Click multi-select
+        self.tree.bind("<Double-1>", self._on_tree_double_click)
+        self.tree.bind("<Control-Button-1>", lambda e: None)
 
-        # footer
+        # --- Footer ---
         footer = ttk.Frame(parent, padding=10)
         footer.pack(fill="x")
         ttk.Button(footer, text="Load / Refresh Tables", command=self._refresh_tables).pack(side="left")
         ttk.Button(footer, text="Apply Changes", command=self._apply_changes).pack(side="right")
 
-        # header tooltips
         HeaderHoverTip(self.tree, hints={
             "#0": "Type (basic, basic_gym, etc.)",
             "path": "Path to the loot table JSON (truncated for readability)",
@@ -646,7 +658,40 @@ class App(tk.Tk):
             self.var_root.set(d)
 
     def _on_tree_selection_changed(self):
+        """Selection changed: update chances AND show references in the side panel."""
         self._update_dynamic_chances()
+
+        sel = self.tree.selection()
+        if not sel:
+            if self.refs_panel.winfo_ismapped():
+                self.body_pane.forget(self.refs_panel)
+            return
+
+        iid = sel[0]
+        if iid not in self.iid_to_index:
+            if self.refs_panel.winfo_ismapped():
+                self.body_pane.forget(self.refs_panel)
+            return
+
+        ti = self.tables[self.iid_to_index[iid]]
+        loot_id = (ti.loot_id or "").lower()
+        if not loot_id:
+            if self.refs_panel.winfo_ismapped():
+                self.body_pane.forget(self.refs_panel)
+            return
+
+        refs = self.references.get(loot_id, [])
+        self.refs_list.delete(0, tk.END)
+        self.refs_list_paths = []
+
+        for ref in refs:
+            self.refs_list.insert(tk.END, Path(ref).name)   # show filename only
+            self.refs_list_paths.append(str(ref))           # keep full path
+
+        if refs and not self.refs_panel.winfo_ismapped():
+            self.body_pane.add(self.refs_panel, weight=1)
+        elif not refs and self.refs_panel.winfo_ismapped():
+            self.body_pane.forget(self.refs_panel)
 
     def _set_mode(self, which: str):
         modes = ("global", "tier", "specific", "air")
@@ -677,17 +722,31 @@ class App(tk.Tk):
         self._update_dynamic_chances()
 
     def _refresh_tables(self):
-        """Load Academy tables, compute baseline chances, populate tree."""
+        """Load Academy tables, compute baseline chances, populate tree and references."""
         self.tree.delete(*self.tree.get_children())
         self.tables.clear()
         self.iid_to_index.clear()
+        self.references = {}
 
         root = Path(self.var_root.get()).resolve()
         if not (root / "data").exists():
-            return  # wait for user to pick a root
+            return
 
         legend = (self.var_legend.get() or "").strip() or "academy:myths_and_legends/legendaries"
         paths = walk_academy_tier_tables(root)
+
+        # Scan loot_table JSONs once for reverse references
+        for json_file in (root / "data").rglob("*.json"):
+            if "loot_table" not in str(json_file).lower():
+                continue
+            doc = load_json(json_file)
+            if not doc:
+                continue
+            for pool in iter_pools(doc):
+                for e in iter_entries(pool):
+                    if e.get("type") == "loot_table" and e.get("value"):
+                        target = self._normalize_loot_id(e["value"])
+                        self.references.setdefault(target, []).append(json_file)
 
         groups: Dict[str, List[TableInfo]] = {}
         for p in paths:
@@ -699,28 +758,56 @@ class App(tk.Tk):
             chance_str = readable_odds(chance)
             empty_w = find_legend_empty_weight(doc, legend)
             editable = empty_w is not None
-            info = TableInfo(path=p, type_name=tname, tier=tier,
-                             chance_value=chance, chance_str=chance_str,
-                             can_edit=editable, air_weight=empty_w)
+
+            # Build loot_id from relative path: namespace:subpath
+            rel = p.relative_to(root / "data")
+            ns = rel.parts[0]
+            if len(rel.parts) >= 3 and rel.parts[1].startswith("loot_table"):
+                subpath = "/".join(rel.parts[2:])
+                if subpath.endswith(".json"):
+                    subpath = subpath[:-5]
+                loot_id = f"{ns}:{subpath}".lower()
+            else:
+                loot_id = None
+
+            info = TableInfo(
+                path=p,
+                type_name=tname,
+                tier=tier,
+                chance_value=chance,
+                chance_str=chance_str,
+                can_edit=editable,
+                air_weight=empty_w,
+                loot_id=loot_id,
+            )
             groups.setdefault(tname, []).append(info)
 
         for tname in sorted(groups.keys()):
             parent_iid = f"type:{tname}"
             self.tree.insert("", "end", iid=parent_iid, text=tname.title(),
-                             values=("", "", ""), open=True)
+                            values=("", "", ""), open=True)
+
             for info in sorted(groups[tname], key=lambda ti: (ti.tier, str(ti.path))):
                 idx = len(self.tables)
                 self.tables.append(info)
                 iid = f"row:{idx}"
                 self.iid_to_index[iid] = idx
                 edit_val = str(info.air_weight) if (self.var_mode_air.get() and info.air_weight is not None) else ""
+
                 self.tree.insert(parent_iid, "end", iid=iid, text="",
-                                 values=(short_display_path(info.path), info.chance_str, edit_val))
+                                values=(short_display_path(info.path), info.chance_str, edit_val))
 
-        self.tree.heading("editcol", text=("Air Weight" if self.var_mode_air.get() else "Multiplier"))
-
+        self.tree.heading("editcol", text=("Air/Empty Weight" if self.var_mode_air.get() else "Multiplier"))
         self._apply_filter(rebuild=False)
         self._update_dynamic_chances()
+
+    def _normalize_loot_id(self, value: str) -> str:
+        """Normalize to namespace:path, drop .json, lowercase."""
+        if ":" not in value:
+            value = "minecraft:" + value
+        if value.endswith(".json"):
+            value = value[:-5]
+        return value.lower()
 
     def _apply_filter(self, rebuild: bool = True):
         """Filter visible rows and preserve Air/Empty edits and selection."""
